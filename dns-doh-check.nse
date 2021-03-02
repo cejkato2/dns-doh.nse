@@ -8,6 +8,11 @@ local json = require "json"
 local strbuf = require "strbuf"
 local base64 = require "base64"
 
+package.path = package.path .. ";/usr/share/lua/5.3/?.lua;/usr/share/lua/5.3/?/init.lua;/usr/lib64/lua/5.3/?.lua;/usr/lib64/lua/5.3/?/init.lua;./?.lua;./?/init.lua"
+package.cpath = package.cpath .. ";/usr/lib64/lua/5.3/?.so;/usr/lib64/lua/5.3/loadall.so;./?.so"
+local http_request = require "http.request"
+local http_tls = require "http.tls"
+
 description = [[
 Performs a checking of DoH service against the target host and port
 ]]
@@ -48,14 +53,19 @@ action = function(host,port)
          end
      end
 
-     local response = http.get(host.ip, port.number, '/dns-query?name=www.example.com&type=A', options)
+     local query1 = '/dns-query?name=www.example.com&type=A'
+     local query2 = '/dns-query?dns='..basequery
+     local query3 = '/dns-query'
+
+     -- HTTP checks
+     local response = http.get(host.ip, port.number, query1, options)
      if response.status == 200 then
          results["DoH-GET-PARAMS"] = true
      else
          results["DoH-GET-PARAMS"] = false
      end
 
-     response = http.get(host.ip, port.number, '/dns-query?dns='..basequery, options)
+     response = http.get(host.ip, port.number, query2, options)
      if response.status == 200 then
          results["DoH-BASE64-PARAM"] = true
      else
@@ -65,13 +75,59 @@ action = function(host,port)
      options['header']['Content-Type'] = 'application/dns-message'
      qstring = base64.dec(basequery)
 
-     response = http.post(host.ip, port.number, "/dns-query", options, "", qstring)
+     response = http.post(host.ip, port.number, query3, options, "", qstring)
      if response.status == 200 then
          results["DoH-POST"] = true
      else
          results["DoH-POST"] = false
      end
 
-     return results
+    -- HTTP2 checks
+    local target = host.ip..":"..port.number
+    local tlsctx = http_tls.new_client_context()
+
+    tlsctx:setVerify(0, 0)
+    req = http_request.new_from_uri("https://"..target..query1)
+    req.ctx = tlsctx
+    req.headers:append("accept", "application/dns-json")
+    req.headers:upsert("user-agent", "example/client")
+    req.version = 2
+    local headers, stream = assert(req:go())
+    if headers:get ":status" == "200" then
+        results["DoH2-GET-PARAMS"] = true
+    else
+        results["DoH2-GET-PARAMS"] = false
+    end
+
+    req = http_request.new_from_uri("https://"..target..query2)
+    req.ctx = tlsctx
+    req.headers:append("accept", "application/dns-message")
+    req.headers:upsert("user-agent", "example/client")
+    req.version = 2
+    local headers, stream = assert(req:go())
+    if headers:get ":status" == "200" then
+        results["DoH2-BASE64-PARAMS"] = true
+    else
+        results["DoH2-BASE64-PARAMS"] = false
+    end
+
+
+    req = http_request.new_from_uri("https://"..target..query3)
+    req.ctx = tlsctx
+    req.headers:upsert(':method', 'POST')
+    req.headers:append("accept", "application/dns-message")
+    req.headers:upsert("user-agent", "example/client")
+    req.headers:upsert('accept', 'application/dns-message')
+    req.headers:upsert('content-type', 'application/dns-message')
+    req:set_body(qstring)
+    req.version = 2
+    headers, stream = assert(req:go())
+    if headers:get ":status" == "200" then
+        results["DoH2-POST"] = true
+    else
+        results["DoH2-POST"] = false
+    end
+
+    return results
 end
 
