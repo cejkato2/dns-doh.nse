@@ -92,8 +92,8 @@ action = function(host,port)
     req.headers:append("accept", "application/dns-json")
     req.headers:upsert("user-agent", "example/client")
     req.version = 2
-    local headers, stream = assert(req:go())
-    if headers:get ":status" == "200" then
+    local headers, stream = req:go()
+    if headers and headers:get ":status" == "200" then
         results["DoH2-GET-PARAMS"] = true
     else
         results["DoH2-GET-PARAMS"] = false
@@ -104,8 +104,8 @@ action = function(host,port)
     req.headers:append("accept", "application/dns-message")
     req.headers:upsert("user-agent", "example/client")
     req.version = 2
-    local headers, stream = assert(req:go())
-    if headers:get ":status" == "200" then
+    local headers, stream = req:go()
+    if headers and headers:get ":status" == "200" then
         results["DoH2-BASE64-PARAMS"] = true
     else
         results["DoH2-BASE64-PARAMS"] = false
@@ -121,8 +121,8 @@ action = function(host,port)
     req.headers:upsert('content-type', 'application/dns-message')
     req:set_body(qstring)
     req.version = 2
-    headers, stream = assert(req:go())
-    if headers:get ":status" == "200" then
+    headers, stream = req:go()
+    if headers and headers:get ":status" == "200" then
         results["DoH2-POST"] = true
     else
         results["DoH2-POST"] = false
