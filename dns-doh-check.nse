@@ -39,11 +39,12 @@ portrule = shortport.http
 action = function(host,port)
 
      local results = {}
+     local timeout = 2
 
      -- construct the query string, the path in the DOH HTTPS GET
      local basequery = "q80BAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB"
      -- define the header value (which defines the output type)
-     local options = {header={}}
+     local options = {header={}, timeout=timeout}
      options['redirect_ok'] = function(host, port)
          local c = 5
          return function(url)
@@ -58,6 +59,9 @@ action = function(host,port)
      local query3 = '/dns-query'
 
      -- HTTP checks
+     if nmap.debugging() > 0 then
+          print("DoH-GET-PARAM checking...")
+     end
      local response = http.get(host.ip, port.number, query1, options)
      if response.status == 200 then
          results["DoH-GET-PARAMS"] = true
@@ -65,6 +69,9 @@ action = function(host,port)
          results["DoH-GET-PARAMS"] = false
      end
 
+     if nmap.debugging() > 0 then
+          print("DoH-BASE64-PARAM checking...")
+     end
      response = http.get(host.ip, port.number, query2, options)
      if response.status == 200 then
          results["DoH-BASE64-PARAM"] = true
@@ -75,6 +82,9 @@ action = function(host,port)
      options['header']['Content-Type'] = 'application/dns-message'
      qstring = base64.dec(basequery)
 
+     if nmap.debugging() > 0 then
+          print("DoH-POST checking...")
+     end
      response = http.post(host.ip, port.number, query3, options, "", qstring)
      if response.status == 200 then
          results["DoH-POST"] = true
@@ -92,7 +102,10 @@ action = function(host,port)
     req.headers:append("accept", "application/dns-json")
     req.headers:upsert("user-agent", "example/client")
     req.version = 2
-    local headers, stream = req:go()
+    if nmap.debugging() > 0 then
+         print("DoH2-GET-PARAMS checking...")
+    end
+    local headers, stream = req:go(timeout)
     if headers and headers:get ":status" == "200" then
         results["DoH2-GET-PARAMS"] = true
     else
@@ -104,7 +117,10 @@ action = function(host,port)
     req.headers:append("accept", "application/dns-message")
     req.headers:upsert("user-agent", "example/client")
     req.version = 2
-    local headers, stream = req:go()
+    if nmap.debugging() > 0 then
+         print("DoH2-BASE64-PARAMS checking...")
+    end
+    local headers, stream = req:go(timeout)
     if headers and headers:get ":status" == "200" then
         results["DoH2-BASE64-PARAMS"] = true
     else
@@ -121,7 +137,10 @@ action = function(host,port)
     req.headers:upsert('content-type', 'application/dns-message')
     req:set_body(qstring)
     req.version = 2
-    headers, stream = req:go()
+    if nmap.debugging() > 0 then
+         print("DoH2-POST checking...")
+    end
+    headers, stream = req:go(timeout)
     if headers and headers:get ":status" == "200" then
         results["DoH2-POST"] = true
     else
